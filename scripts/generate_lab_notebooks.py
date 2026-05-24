@@ -1770,6 +1770,7 @@ def lab_05():
     )
 
 
+
 def lab_06():
     write_notebook(
         "lab_06_6_16_angle_bisectors.ipynb",
@@ -1971,6 +1972,115 @@ def lab_06():
             anim = FuncAnimation(fig, animate, frames=100, interval=80)
             finish_animation(anim, fig)
             """),
+            code(COMMON_3D),
+            code(r"""
+            frames = 90
+            constants = np.linspace(-1.5, 1.5, 7)
+
+
+            def metric_coeffs(case, U, V):
+                if case == "a":
+                    E = 1 + np.exp(2 * V)
+                    F = -np.exp(2 * U)
+                    G = np.exp(2 * U)
+                elif case == "b":
+                    E = np.ones_like(U)
+                    F = (2 * U - 1) / 2
+                    G = 1 + U**2
+                elif case == "c":
+                    E = np.ones_like(U)
+                    F = np.sin(U - V)
+                    G = np.ones_like(U)
+                elif case == "d":
+                    E = 1 + (1 + V) ** 2
+                    F = -(1 + V) ** 2
+                    G = (1 + V) ** 2
+                else:
+                    raise ValueError(case)
+                return E, F, G
+
+
+            def metric_density(case, U, V):
+                E, F, G = metric_coeffs(case, U, V)
+                det = E * G - F**2
+                return np.where(det > 0, np.sqrt(det), np.nan)
+
+
+            domains = {
+                "a": ((-2.0, 0.0), (-1.4, 1.4)),
+                "b": ((-0.55, 1.8), (-2.0, 2.0)),
+                "c": ((-2.0, 2.0), (-2.0, 2.0)),
+                "d": ((-2.0, 2.0), (-0.45, 2.2)),
+            }
+            colors = {"a": "steelblue", "b": "darkorange", "c": "seagreen", "d": "purple"}
+            titles = {
+                "a": "6.16а: z=sqrt(det g)",
+                "b": "6.16б: z=sqrt(det g)",
+                "c": "6.16в: z=sqrt(det g)",
+                "d": "6.16г: z=sqrt(det g)",
+            }
+
+            fig = plt.figure(figsize=(11, 9))
+            fig.suptitle("6.16: 3D-карта метрики z=sqrt(det g), не восстановленная поверхность", y=0.98)
+            axes = [
+                fig.add_subplot(221, projection="3d"),
+                fig.add_subplot(222, projection="3d"),
+                fig.add_subplot(223, projection="3d"),
+                fig.add_subplot(224, projection="3d"),
+            ]
+
+
+            def draw_case(ax, case, frame):
+                ax.clear()
+                (umin, umax), (vmin, vmax) = domains[case]
+                uu = np.linspace(umin, umax, 50)
+                vv = np.linspace(vmin, vmax, 50)
+                U, V = np.meshgrid(uu, vv)
+                Z = metric_density(case, U, V)
+                zmax = np.nanmax(Z)
+                ax.plot_surface(U, V, Z, alpha=0.52, linewidth=0, color=colors[case])
+
+                shift = 0.55 * np.sin(2 * np.pi * frame / frames)
+                for sign, color in [(1, "navy"), (-1, "crimson")]:
+                    for u_line, v_line in curves_for_case(case, sign, constants + shift):
+                        mask = (
+                            (u_line >= umin) & (u_line <= umax) &
+                            (v_line >= vmin) & (v_line <= vmax)
+                        )
+                        if np.count_nonzero(mask) < 2:
+                            continue
+                        z_line = metric_density(case, u_line[mask], v_line[mask])
+                        good = np.isfinite(z_line)
+                        if np.count_nonzero(good) < 2:
+                            continue
+                        ax.plot(
+                            u_line[mask][good],
+                            v_line[mask][good],
+                            z_line[good] + 0.04 * zmax,
+                            color=color,
+                            linewidth=1.8,
+                            alpha=0.9,
+                        )
+
+                ax.set_xlim(umin, umax)
+                ax.set_ylim(vmin, vmax)
+                ax.set_zlim(0, 1.12 * zmax)
+                ax.set_xlabel("u")
+                ax.set_ylabel("v")
+                ax.set_zlabel(r"$\sqrt{\det g}$")
+                ax.set_title(titles[case])
+                ax.view_init(elev=28, azim=35 + 1.5 * frame)
+
+
+            def animate(frame):
+                for ax, case in zip(axes, ["a", "b", "c", "d"]):
+                    draw_case(ax, case, frame)
+                return []
+
+
+            anim = FuncAnimation(fig, animate, frames=frames, interval=90)
+            finish_animation(anim, fig)
+            """),
         ],
     )
 
@@ -2130,6 +2240,191 @@ def lab_07():
 
             Это пара сопряженных гипербол.
             """),
+            code(COMMON_3D),
+            code(r"""
+            frames = 100
+
+
+            def tangent_patch(ax, point, e1, e2, scale=0.45, color="crimson"):
+                s = np.linspace(-scale, scale, 8)
+                t = np.linspace(-scale, scale, 8)
+                S, T = np.meshgrid(s, t)
+                P = point[:, None, None] + S[None, :, :] * e1[:, None, None] + T[None, :, :] * e2[:, None, None]
+                ax.plot_surface(P[0], P[1], P[2], alpha=0.28, linewidth=0, color=color)
+
+
+            def tangent_curve(ax, point, e1, e2, xi, eta, **plot_kwargs):
+                P = point[:, None] + xi[None, :] * e1[:, None] + eta[None, :] * e2[:, None]
+                ax.plot(P[0], P[1], P[2], **plot_kwargs)
+
+
+            def surface_line(ax, x, y, z, color, linestyle="-"):
+                ax.plot(x, y, z, color=color, linewidth=2.7, linestyle=linestyle)
+
+
+            fig = plt.figure(figsize=(11, 9))
+            fig.suptitle("7.18: поверхности, касательные плоскости и индикатрисы Дюпена", y=0.98)
+            axes = [
+                fig.add_subplot(221, projection="3d"),
+                fig.add_subplot(222, projection="3d"),
+                fig.add_subplot(223, projection="3d"),
+                fig.add_subplot(224, projection="3d"),
+            ]
+            indicatrix_scale = 0.28
+
+            # 7.18а: сфера
+            R = 1.6
+            u0 = np.pi / 4
+            v0 = np.pi / 4
+            u = np.linspace(-np.pi / 2, np.pi / 2, 45)
+            v = np.linspace(0, 2 * np.pi, 70)
+            U, V = np.meshgrid(u, v)
+            X = R * np.cos(U) * np.cos(V)
+            Y = R * np.cos(U) * np.sin(V)
+            Z = R * np.sin(U)
+            P = np.array([R * np.cos(u0) * np.cos(v0), R * np.cos(u0) * np.sin(v0), R * np.sin(u0)])
+            eu = np.array([-np.sin(u0) * np.cos(v0), -np.sin(u0) * np.sin(v0), np.cos(u0)])
+            ev = np.array([-np.sin(v0), np.cos(v0), 0.0])
+            axes[0].plot_surface(X, Y, Z, alpha=0.55, linewidth=0, color="steelblue")
+            axes[0].scatter(*P, color="black", s=35)
+            uu = np.linspace(-np.pi / 2, np.pi / 2, 220)
+            vv = np.linspace(0, 2 * np.pi, 260)
+            surface_line(
+                axes[0],
+                R * np.cos(uu) * np.cos(v0),
+                R * np.cos(uu) * np.sin(v0),
+                R * np.sin(uu),
+                color="black",
+            )
+            surface_line(
+                axes[0],
+                R * np.cos(u0) * np.cos(vv),
+                R * np.cos(u0) * np.sin(vv),
+                R * np.sin(u0) * np.ones_like(vv),
+                color="white",
+            )
+            tangent_patch(axes[0], P, eu, ev, scale=0.45)
+            xi = indicatrix_scale * np.sqrt(R) * np.cos(v)
+            eta = indicatrix_scale * np.sqrt(R) * np.sin(v)
+            tangent_curve(axes[0], P, eu, ev, xi, eta, color="gold", linewidth=2.8)
+            setup_3d(axes[0], (-1.8, 1.8), (-1.8, 1.8), (-1.8, 1.8), "7.18а: сфера")
+
+            # 7.18б: цилиндр
+            a = 1.0
+            h = np.linspace(-1.6, 1.6, 45)
+            v = np.linspace(0, 2 * np.pi, 70)
+            H, V = np.meshgrid(h, v)
+            X = a * np.cos(V)
+            Y = a * np.sin(V)
+            Z = H
+            v0 = np.pi / 4
+            u0 = 0.25
+            P = np.array([a * np.cos(v0), a * np.sin(v0), u0])
+            eu = np.array([0.0, 0.0, 1.0])
+            ev = np.array([-np.sin(v0), np.cos(v0), 0.0])
+            axes[1].plot_surface(X, Y, Z, alpha=0.55, linewidth=0, color="darkorange")
+            axes[1].scatter(*P, color="black", s=35)
+            hh = np.linspace(-1.6, 1.6, 220)
+            vv = np.linspace(0, 2 * np.pi, 260)
+            surface_line(
+                axes[1],
+                a * np.cos(v0) * np.ones_like(hh),
+                a * np.sin(v0) * np.ones_like(hh),
+                hh,
+                color="black",
+            )
+            surface_line(
+                axes[1],
+                a * np.cos(vv),
+                a * np.sin(vv),
+                u0 * np.ones_like(vv),
+                color="white",
+            )
+            tangent_patch(axes[1], P, eu, ev, scale=0.5)
+            xi = indicatrix_scale * np.linspace(-1.7, 1.7, 120)
+            eta = indicatrix_scale * np.sqrt(a) * np.ones_like(xi)
+            tangent_curve(axes[1], P, eu, ev, xi, eta, color="gold", linewidth=2.8)
+            tangent_curve(axes[1], P, eu, ev, xi, -eta, color="gold", linewidth=2.8)
+            setup_3d(axes[1], (-1.4, 1.4), (-1.4, 1.4), (-1.8, 1.8), "7.18б: цилиндр")
+
+            # 7.18в: параболоид
+            x = np.linspace(-0.75, 0.75, 55)
+            y = np.linspace(-0.5, 0.5, 55)
+            X, Y = np.meshgrid(x, y)
+            Z = 2 * X**2 + 4.5 * Y**2
+            P = np.array([0.0, 0.0, 0.0])
+            axes[2].plot_surface(X, Y, Z, alpha=0.62, linewidth=0, color="seagreen")
+            axes[2].scatter(*P, color="black", s=35)
+            xx = np.linspace(-0.75, 0.75, 240)
+            yy = np.linspace(-0.5, 0.5, 240)
+            surface_line(axes[2], xx, np.zeros_like(xx), 2 * xx**2, color="black")
+            surface_line(axes[2], np.zeros_like(yy), yy, 4.5 * yy**2, color="white")
+            ex = np.array([1.0, 0.0, 0.0])
+            ey = np.array([0.0, 1.0, 0.0])
+            tangent_patch(axes[2], P, ex, ey, scale=0.35)
+            xi = 0.5 * np.cos(v)
+            eta = (1 / 3) * np.sin(v)
+            tangent_curve(axes[2], P, ex, ey, xi, eta, color="gold", linewidth=2.8)
+            setup_3d(axes[2], (-0.8, 0.8), (-0.8, 0.8), (-0.1, 2.0), "7.18в: параболоид")
+
+            # 7.18г: катеноид
+            u = np.linspace(-1.3, 1.3, 55)
+            v = np.linspace(0, 2 * np.pi, 75)
+            U, V = np.meshgrid(u, v)
+            X = np.cosh(U) * np.cos(V)
+            Y = np.cosh(U) * np.sin(V)
+            Z = U
+            u0 = 0.7
+            v0 = np.pi / 4
+            P = np.array([np.cosh(u0) * np.cos(v0), np.cosh(u0) * np.sin(v0), u0])
+            ru = np.array([np.sinh(u0) * np.cos(v0), np.sinh(u0) * np.sin(v0), 1.0])
+            rv = np.array([-np.cosh(u0) * np.sin(v0), np.cosh(u0) * np.cos(v0), 0.0])
+            ru = ru / np.linalg.norm(ru)
+            rv = rv / np.linalg.norm(rv)
+            axes[3].plot_surface(X, Y, Z, alpha=0.55, linewidth=0, color="purple")
+            axes[3].scatter(*P, color="black", s=35)
+            uu = np.linspace(-1.3, 1.3, 240)
+            vv = np.linspace(0, 2 * np.pi, 260)
+            surface_line(
+                axes[3],
+                np.cosh(uu) * np.cos(v0),
+                np.cosh(uu) * np.sin(v0),
+                uu,
+                color="black",
+            )
+            surface_line(
+                axes[3],
+                np.cosh(u0) * np.cos(vv),
+                np.cosh(u0) * np.sin(vv),
+                u0 * np.ones_like(vv),
+                color="white",
+            )
+            tangent_patch(axes[3], P, ru, rv, scale=0.45)
+            s = np.linspace(-1.3, 1.3, 180)
+            c0 = np.cosh(u0)
+            xi = indicatrix_scale * s
+            eta = indicatrix_scale * np.sqrt(s**2 + c0**2)
+            tangent_curve(axes[3], P, ru, rv, xi, eta, color="gold", linewidth=2.4)
+            tangent_curve(axes[3], P, ru, rv, xi, -eta, color="gold", linewidth=2.4)
+            xi2 = indicatrix_scale * np.sqrt(s**2 + c0**2)
+            eta2 = indicatrix_scale * s
+            tangent_curve(axes[3], P, ru, rv, xi2, eta2, color="gold", linewidth=1.8, linestyle="--")
+            tangent_curve(axes[3], P, ru, rv, -xi2, eta2, color="gold", linewidth=1.8, linestyle="--")
+            setup_3d(axes[3], (-2.1, 2.1), (-2.1, 2.1), (-1.5, 1.5), "7.18г: катеноид")
+
+            for ax in axes:
+                set_axes_equal_3d(ax)
+
+
+            def animate(i):
+                for ax in axes:
+                    ax.view_init(elev=24, azim=35 + 2 * i)
+                return []
+
+
+            anim = FuncAnimation(fig, animate, frames=frames, interval=80)
+            finish_animation(anim, fig)
+            """),
             code(COMMON_2D),
             code(r"""
             frames = 100
@@ -2195,6 +2490,226 @@ def lab_07():
                 axes[3].set_ylim(-3, 3)
                 axes[0].set_xlim(-1.8, 1.8)
                 axes[1].set_xlim(-3, 3)
+                return []
+
+
+            anim = FuncAnimation(fig, animate, frames=frames, interval=80)
+            finish_animation(anim, fig)
+            """),
+            code(r"""
+            frames = 120
+            theta = np.linspace(0, 2 * np.pi, 500)
+            s = np.linspace(-1.35, 1.35, 500)
+            visual_scale = 0.32
+
+
+            def tangent_xyz(point, e1, e2, xi, eta):
+                return point[:, None] + xi[None, :] * e1[:, None] + eta[None, :] * e2[:, None]
+
+
+            def set_line3d(line, xyz):
+                line.set_data(xyz[0], xyz[1])
+                line.set_3d_properties(xyz[2])
+
+
+            def set_point3d(point_artist, xyz):
+                point_artist.set_data([xyz[0]], [xyz[1]])
+                point_artist.set_3d_properties([xyz[2]])
+
+
+            def surface_line(ax, x, y, z, color, linestyle="-"):
+                ax.plot(x, y, z, color=color, linewidth=2.5, linestyle=linestyle)
+
+
+            fig = plt.figure(figsize=(11, 9))
+            fig.suptitle("7.18: движение индикатрис в касательных плоскостях", y=0.98)
+            axes = [
+                fig.add_subplot(221, projection="3d"),
+                fig.add_subplot(222, projection="3d"),
+                fig.add_subplot(223, projection="3d"),
+                fig.add_subplot(224, projection="3d"),
+            ]
+
+            moving_lines = []
+            moving_points = []
+
+            # 7.18а: сфера
+            R = 1.6
+            u0 = np.pi / 4
+            v0 = np.pi / 4
+            u = np.linspace(-np.pi / 2, np.pi / 2, 45)
+            v = np.linspace(0, 2 * np.pi, 70)
+            U, V = np.meshgrid(u, v)
+            X = R * np.cos(U) * np.cos(V)
+            Y = R * np.cos(U) * np.sin(V)
+            Z = R * np.sin(U)
+            P_sphere = np.array([R * np.cos(u0) * np.cos(v0), R * np.cos(u0) * np.sin(v0), R * np.sin(u0)])
+            e1_sphere = np.array([-np.sin(u0) * np.cos(v0), -np.sin(u0) * np.sin(v0), np.cos(u0)])
+            e2_sphere = np.array([-np.sin(v0), np.cos(v0), 0.0])
+            xi_sphere = visual_scale * np.sqrt(R) * np.cos(theta)
+            eta_sphere = visual_scale * np.sqrt(R) * np.sin(theta)
+            axes[0].plot_surface(X, Y, Z, alpha=0.45, linewidth=0, color="steelblue")
+            axes[0].scatter(*P_sphere, color="black", s=30)
+            uu = np.linspace(-np.pi / 2, np.pi / 2, 220)
+            vv = np.linspace(0, 2 * np.pi, 260)
+            surface_line(
+                axes[0],
+                R * np.cos(uu) * np.cos(v0),
+                R * np.cos(uu) * np.sin(v0),
+                R * np.sin(uu),
+                color="black",
+            )
+            surface_line(
+                axes[0],
+                R * np.cos(u0) * np.cos(vv),
+                R * np.cos(u0) * np.sin(vv),
+                R * np.sin(u0) * np.ones_like(vv),
+                color="white",
+            )
+            tangent_patch(axes[0], P_sphere, e1_sphere, e2_sphere, scale=0.52)
+            line, = axes[0].plot([], [], [], color="gold", linewidth=3)
+            point, = axes[0].plot([], [], [], "o", color="crimson", markersize=6)
+            moving_lines.append((line, P_sphere, e1_sphere, e2_sphere, xi_sphere, eta_sphere, "closed"))
+            moving_points.append((point, P_sphere, e1_sphere, e2_sphere, xi_sphere, eta_sphere))
+            setup_3d(axes[0], (-1.8, 1.8), (-1.8, 1.8), (-1.8, 1.8), "7.18а: окружность")
+
+            # 7.18б: цилиндр
+            a = 1.0
+            h = np.linspace(-1.6, 1.6, 45)
+            v = np.linspace(0, 2 * np.pi, 70)
+            H, V = np.meshgrid(h, v)
+            X = a * np.cos(V)
+            Y = a * np.sin(V)
+            Z = H
+            v0 = np.pi / 4
+            u0 = 0.25
+            P_cyl = np.array([a * np.cos(v0), a * np.sin(v0), u0])
+            e1_cyl = np.array([0.0, 0.0, 1.0])
+            e2_cyl = np.array([-np.sin(v0), np.cos(v0), 0.0])
+            xi_cyl = visual_scale * np.linspace(-1.7, 1.7, 500)
+            eta_cyl_top = visual_scale * np.sqrt(a) * np.ones_like(xi_cyl)
+            eta_cyl_bottom = -eta_cyl_top
+            axes[1].plot_surface(X, Y, Z, alpha=0.45, linewidth=0, color="darkorange")
+            axes[1].scatter(*P_cyl, color="black", s=30)
+            hh = np.linspace(-1.6, 1.6, 220)
+            vv = np.linspace(0, 2 * np.pi, 260)
+            surface_line(
+                axes[1],
+                a * np.cos(v0) * np.ones_like(hh),
+                a * np.sin(v0) * np.ones_like(hh),
+                hh,
+                color="black",
+            )
+            surface_line(
+                axes[1],
+                a * np.cos(vv),
+                a * np.sin(vv),
+                u0 * np.ones_like(vv),
+                color="white",
+            )
+            tangent_patch(axes[1], P_cyl, e1_cyl, e2_cyl, scale=0.58)
+            line_top, = axes[1].plot([], [], [], color="gold", linewidth=3)
+            line_bottom, = axes[1].plot([], [], [], color="gold", linewidth=3)
+            point_top, = axes[1].plot([], [], [], "o", color="crimson", markersize=6)
+            point_bottom, = axes[1].plot([], [], [], "o", color="crimson", markersize=6)
+            moving_lines.append((line_top, P_cyl, e1_cyl, e2_cyl, xi_cyl, eta_cyl_top, "open"))
+            moving_lines.append((line_bottom, P_cyl, e1_cyl, e2_cyl, xi_cyl, eta_cyl_bottom, "open"))
+            moving_points.append((point_top, P_cyl, e1_cyl, e2_cyl, xi_cyl, eta_cyl_top))
+            moving_points.append((point_bottom, P_cyl, e1_cyl, e2_cyl, xi_cyl, eta_cyl_bottom))
+            setup_3d(axes[1], (-1.4, 1.4), (-1.4, 1.4), (-1.8, 1.8), "7.18б: пара прямых")
+
+            # 7.18в: параболоид
+            x = np.linspace(-0.75, 0.75, 55)
+            y = np.linspace(-0.5, 0.5, 55)
+            X, Y = np.meshgrid(x, y)
+            Z = 2 * X**2 + 4.5 * Y**2
+            P_para = np.array([0.0, 0.0, 0.0])
+            e1_para = np.array([1.0, 0.0, 0.0])
+            e2_para = np.array([0.0, 1.0, 0.0])
+            xi_para = 0.5 * np.cos(theta)
+            eta_para = (1 / 3) * np.sin(theta)
+            axes[2].plot_surface(X, Y, Z, alpha=0.52, linewidth=0, color="seagreen")
+            axes[2].scatter(*P_para, color="black", s=30)
+            xx = np.linspace(-0.75, 0.75, 240)
+            yy = np.linspace(-0.5, 0.5, 240)
+            surface_line(axes[2], xx, np.zeros_like(xx), 2 * xx**2, color="black")
+            surface_line(axes[2], np.zeros_like(yy), yy, 4.5 * yy**2, color="white")
+            tangent_patch(axes[2], P_para, e1_para, e2_para, scale=0.42)
+            line, = axes[2].plot([], [], [], color="gold", linewidth=3)
+            point, = axes[2].plot([], [], [], "o", color="crimson", markersize=6)
+            moving_lines.append((line, P_para, e1_para, e2_para, xi_para, eta_para, "closed"))
+            moving_points.append((point, P_para, e1_para, e2_para, xi_para, eta_para))
+            setup_3d(axes[2], (-0.8, 0.8), (-0.8, 0.8), (-0.1, 2.0), "7.18в: эллипс")
+
+            # 7.18г: катеноид
+            u = np.linspace(-1.3, 1.3, 55)
+            v = np.linspace(0, 2 * np.pi, 75)
+            U, V = np.meshgrid(u, v)
+            X = np.cosh(U) * np.cos(V)
+            Y = np.cosh(U) * np.sin(V)
+            Z = U
+            u0 = 0.7
+            v0 = np.pi / 4
+            P_cat = np.array([np.cosh(u0) * np.cos(v0), np.cosh(u0) * np.sin(v0), u0])
+            e1_cat = np.array([np.sinh(u0) * np.cos(v0), np.sinh(u0) * np.sin(v0), 1.0])
+            e2_cat = np.array([-np.cosh(u0) * np.sin(v0), np.cosh(u0) * np.cos(v0), 0.0])
+            e1_cat = e1_cat / np.linalg.norm(e1_cat)
+            e2_cat = e2_cat / np.linalg.norm(e2_cat)
+            c0 = np.cosh(u0)
+            xi_cat = visual_scale * s
+            eta_cat = visual_scale * np.sqrt(s**2 + c0**2)
+            xi_cat_2 = visual_scale * np.sqrt(s**2 + c0**2)
+            eta_cat_2 = visual_scale * s
+            axes[3].plot_surface(X, Y, Z, alpha=0.45, linewidth=0, color="purple")
+            axes[3].scatter(*P_cat, color="black", s=30)
+            uu = np.linspace(-1.3, 1.3, 240)
+            vv = np.linspace(0, 2 * np.pi, 260)
+            surface_line(
+                axes[3],
+                np.cosh(uu) * np.cos(v0),
+                np.cosh(uu) * np.sin(v0),
+                uu,
+                color="black",
+            )
+            surface_line(
+                axes[3],
+                np.cosh(u0) * np.cos(vv),
+                np.cosh(u0) * np.sin(vv),
+                u0 * np.ones_like(vv),
+                color="white",
+            )
+            tangent_patch(axes[3], P_cat, e1_cat, e2_cat, scale=0.55)
+            for xi, eta, style in [
+                (xi_cat, eta_cat, "-"),
+                (xi_cat, -eta_cat, "-"),
+                (xi_cat_2, eta_cat_2, "--"),
+                (-xi_cat_2, eta_cat_2, "--"),
+            ]:
+                line, = axes[3].plot([], [], [], color="gold", linewidth=2.4, linestyle=style)
+                point, = axes[3].plot([], [], [], "o", color="crimson", markersize=5)
+                moving_lines.append((line, P_cat, e1_cat, e2_cat, xi, eta, "open"))
+                moving_points.append((point, P_cat, e1_cat, e2_cat, xi, eta))
+            setup_3d(axes[3], (-2.1, 2.1), (-2.1, 2.1), (-1.5, 1.5), "7.18г: гиперболы")
+
+            for ax in axes:
+                set_axes_equal_3d(ax)
+
+
+            def animate(i):
+                for line, point, e1, e2, xi, eta, mode in moving_lines:
+                    if mode == "closed":
+                        k = max(2, int((i + 1) / frames * len(xi)))
+                    else:
+                        k = max(2, int((i + 1) / frames * len(xi)))
+                    set_line3d(line, tangent_xyz(point, e1, e2, xi[:k], eta[:k]))
+
+                for point_artist, point, e1, e2, xi, eta in moving_points:
+                    k = min(len(xi) - 1, max(1, int(i / (frames - 1) * (len(xi) - 1))))
+                    xyz = point + xi[k] * e1 + eta[k] * e2
+                    set_point3d(point_artist, xyz)
+
+                for ax in axes:
+                    ax.view_init(elev=24, azim=35 + 1.4 * i)
                 return []
 
 
